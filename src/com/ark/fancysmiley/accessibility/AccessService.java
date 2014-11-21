@@ -2,6 +2,7 @@ package com.ark.fancysmiley.accessibility;
 
 import android.accessibilityservice.AccessibilityService;
 import android.accessibilityservice.AccessibilityServiceInfo;
+import android.content.Intent;
 import android.util.Log;
 import android.view.accessibility.AccessibilityEvent;
 import android.widget.Toast;
@@ -9,11 +10,15 @@ import android.widget.Toast;
 import com.ark.fancysmiley.common.CommonUtils;
 
 public class AccessService extends AccessibilityService {
-	private static final String[] PACKAGES = new String[] { "com.whatsapp", "jp.naver.line.android", "com.kakao.talk",
-			"com.facebook.orca" };
 	public static final String TAG = AccessService.class.getName();
 
+	private static final String[] PACKAGES = new String[] { "com.whatsapp", "jp.naver.line.android", "com.kakao.talk",
+			"com.facebook.orca" };
+
 	private static final String ACTIVITY_WHATSAPP_CONVERSATION = "com.whatsapp.Conversation";
+	private boolean whatsAppRunning = false;
+
+	private Thread availablityCheckingThread;
 
 	@Override
 	protected void onServiceConnected() {
@@ -34,34 +39,41 @@ public class AccessService extends AccessibilityService {
 	}
 
 	@Override
-	public void onAccessibilityEvent(AccessibilityEvent event) {
-		System.out.println("AccessService.onAccessibilityEvent()");
+	public void onAccessibilityEvent(final AccessibilityEvent event) {
+		final String packageName = event.getPackageName().toString();
+		final int eventType = event.getEventType();
 
-		String packageName = event.getPackageName().toString();
-		int eventType = event.getEventType();
-
-		System.err.println(packageName);
 		System.out.println("Event type: " + eventType);
-		String className = event.getClassName().toString();
-		System.err.println("Class Name" + className);
+		final String className = event.getClassName().toString();
+		System.err.println("Class Name: " + className);
+		final String text = event.getText().toString();
 
 		switch (eventType) {
 		case AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED:
 			if (className.equals(ACTIVITY_WHATSAPP_CONVERSATION)) {
 				if (CommonUtils.isActivityInForeground(getApplicationContext(), ACTIVITY_WHATSAPP_CONVERSATION)) {
+					whatsAppRunning = true;
+
+					startService(new Intent(getApplicationContext(), ViewBindServices.class));
+
+					checkAvailablity();
+
 					Toast.makeText(getApplicationContext(), packageName + " Coversation Started", Toast.LENGTH_SHORT)
 							.show();
 				}
 			} else {
+				whatsAppRunning = false;
+
+				stopService(new Intent(getApplicationContext(), ViewBindServices.class));
+
 				Toast.makeText(getApplicationContext(), packageName + " Coversation Stopped", Toast.LENGTH_SHORT)
 						.show();
 			}
 			break;
 
 		case AccessibilityEvent.TYPE_VIEW_CLICKED:
-			if (className.equals(ACTIVITY_WHATSAPP_CONVERSATION)) {
-				Toast.makeText(getApplicationContext(), packageName + " >> " + event.getText(), Toast.LENGTH_SHORT)
-						.show();
+			if (whatsAppRunning && className.equals(ACTIVITY_WHATSAPP_CONVERSATION)) {
+				Toast.makeText(getApplicationContext(), packageName + " >> " + text, Toast.LENGTH_SHORT).show();
 			}
 			break;
 
@@ -73,6 +85,26 @@ public class AccessService extends AccessibilityService {
 	@Override
 	public void onInterrupt() {
 		System.out.println("AccessService.onInterrupt()");
+	}
+
+	private void checkAvailablity() {
+		if (availablityCheckingThread == null || !availablityCheckingThread.isAlive()) {
+			availablityCheckingThread = new Thread() {
+				@Override
+				public void run() {
+					super.run();
+
+					boolean needed = false;
+					do {
+						for (int i = 0; i < PACKAGES.length; i++) {
+							if (CommonUtils.isApplicationIsInForeground(getApplicationContext(), PACKAGES[i])) {
+								needed = false;
+							}
+						}
+					} while (needed);
+				}
+			};
+		}
 	}
 
 }

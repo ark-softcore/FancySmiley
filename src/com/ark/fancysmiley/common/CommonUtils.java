@@ -53,14 +53,14 @@ public class CommonUtils {
 			
 			for (int i = 0; i < runningTasks.size(); i++) {
 				ComponentName topActivity = runningTasks.get(i).topActivity;
-				
+
 				System.out.println(topActivity);
-				
+
 				if (topActivity.getClassName().equals(packageName)) {
 					return true;
 				}
 			}
-			
+
 		} catch (Exception e) {
 			Log.e(TAG, "isActivityForeground", e);
 		}
